@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>진급 점수표</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1020;--panel:#131b2e;--line:#293650;--text:#eef3ff;--muted:#9eacc5;--accent:#74a7ff}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#1a2b4a 0,#0b1020 55%);color:var(--text);font:16px system-ui,-apple-system,sans-serif;min-height:100vh}
+main{max-width:1000px;margin:auto;padding:28px 16px 60px}.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:22px}
+h1{font-size:clamp(26px,5vw,38px);margin:0;letter-spacing:-1px}p{color:var(--muted)}.panel{background:#131b2eeb;border:1px solid var(--line);border-radius:18px;padding:18px;margin:16px 0;box-shadow:0 12px 40px #0002}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.row>*{flex:1;min-width:130px}input,button{font:inherit;border-radius:10px;padding:11px 12px;border:1px solid var(--line)}input{background:#0b1222;color:var(--text);min-width:0}button{background:var(--accent);color:#071328;font-weight:700;cursor:pointer;border:0}button.secondary{background:#26344e;color:var(--text)}button.danger{background:#512b3a;color:#ffe6eb}
+table{border-collapse:collapse;width:100%;min-width:460px}th,td{text-align:left;padding:13px 12px;border-bottom:1px solid var(--line)}th{color:#a9c8ff;font-size:13px;text-transform:uppercase;letter-spacing:.05em}tbody tr:hover{background:#ffffff08}.score{font-variant-numeric:tabular-nums;font-weight:800}.muted{color:var(--muted);font-size:14px}.hidden{display:none!important}.status{min-height:22px;color:var(--muted);font-size:14px}.pill{border:1px solid #38537b;color:#bcd5ff;border-radius:999px;padding:5px 10px;font-size:12px}
+@media(max-width:520px){main{padding:20px 12px}.panel{padding:14px}.row>*{min-width:100%}}
+</style>
+</head>
+<body><main>
+<header class="top"><div><h1>진급 점수표</h1><p>계급과 보직별 점수를 확인하세요.</p></div><span id="authBadge" class="pill">공개 열람</span></header>
+<section class="panel"><div class="row"><input id="search" placeholder="계급 또는 보직 검색" aria-label="점수표 검색"><button id="loginOpen" class="secondary">관리자 로그인</button><button id="logout" class="secondary hidden">로그아웃</button></div><div id="status" class="status" role="status"></div></section>
+<section id="loginPanel" class="panel hidden"><h2>관리자 로그인</h2><form id="loginForm"><div class="row"><input id="username" autocomplete="username" placeholder="아이디" required><input id="password" type="password" autocomplete="current-password" placeholder="비밀번호" required><button type="submit">로그인</button></div></form><p class="muted">관리자에게 받은 계정으로 로그인하세요.</p></section>
+<section id="adminPanel" class="panel hidden"><h2>점수 항목 관리</h2><form id="scoreForm"><div class="row"><input id="rank" placeholder="계급" required maxlength="80"><input id="role" placeholder="보직" required maxlength="80"><input id="score" type="number" step="1" placeholder="점수 (음수 가능)" required><button type="submit">항목 추가</button></div></form><p class="muted">점수 차감은 음수로 입력할 수 있어요. 기존 항목은 수정·삭제할 수 있습니다.</p></section>
+<section class="panel"><div class="top"><h2>점수 목록</h2><span id="count" class="pill">0개 항목</span></div><div class="table-wrap"><table><thead><tr><th>계급</th><th>보직</th><th>점수</th><th id="actionsHead" class="hidden">관리</th></tr></thead><tbody id="rows"></tbody></table></div><p id="empty" class="muted">아직 등록된 점수가 없습니다.</p></section>
+</main>
+<script>
+const $=id=>document.getElementById(id);let scores=[],loggedIn=false;
+async function api(url,options={}){const r=await fetch(url,{...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.error||'요청을 처리하지 못했습니다.');return data}
+function say(s){$('status').textContent=s}
+function render(){const q=$('search').value.trim().toLowerCase();const shown=scores.filter(x=>(x.rank+' '+x.role).toLowerCase().includes(q));$('rows').replaceChildren();for(const item of shown){const tr=document.createElement('tr');for(const value of [item.rank,item.role,String(item.score)]){const td=document.createElement('td');td.textContent=value;if(value===String(item.score))td.className='score';tr.append(td)}if(loggedIn){const td=document.createElement('td');td.style.whiteSpace='nowrap';const edit=document.createElement('button');edit.className='secondary';edit.textContent='수정';edit.onclick=()=>editItem(item);const del=document.createElement('button');del.className='danger';del.style.marginLeft='6px';del.textContent='삭제';del.onclick=()=>deleteItem(item);td.append(edit,del);tr.append(td)}$('rows').append(tr)}$('count').textContent=shown.length+'개 항목';$('empty').classList.toggle('hidden',shown.length>0);$('actionsHead').classList.toggle('hidden',!loggedIn)}
+function setAuth(v){loggedIn=v;$('authBadge').textContent=v?'관리자 로그인됨':'공개 열람';$('loginOpen').classList.toggle('hidden',v);$('logout').classList.toggle('hidden',!v);$('loginPanel').classList.add('hidden');$('adminPanel').classList.toggle('hidden',!v);render()}
+async function load(){try{scores=await api('/api/scores');render();const me=await api('/api/me');setAuth(me.loggedIn)}catch(e){say(e.message)}}
+$('search').addEventListener('input',render);$('loginOpen').onclick=()=>$('loginPanel').classList.toggle('hidden');
+$('loginForm').onsubmit=async e=>{e.preventDefault();try{await api('/api/login',{method:'POST',body:JSON.stringify({username:$('username').value,password:$('password').value})});$('password').value='';setAuth(true);say('로그인되었습니다.')}catch(e){say(e.message)}};
+$('logout').onclick=async()=>{try{await api('/api/logout',{method:'POST'});setAuth(false);say('로그아웃되었습니다.')}catch(e){say(e.message)}};
+$('scoreForm').onsubmit=async e=>{e.preventDefault();try{scores=await api('/api/scores',{method:'POST',body:JSON.stringify({rank:$('rank').value,role:$('role').value,score:Number($('score').value)})});$('scoreForm').reset();render();say('점수 항목을 추가했습니다.')}catch(e){say(e.message)}};
+async function editItem(item){const rank=prompt('계급',item.rank);if(rank===null)return;const role=prompt('보직',item.role);if(role===null)return;const score=prompt('점수 (음수 가능)',item.score);if(score===null)return;try{scores=await api('/api/scores/'+encodeURIComponent(item.id),{method:'PATCH',body:JSON.stringify({rank,role,score:Number(score)})});render();say('항목을 수정했습니다.')}catch(e){say(e.message)}}
+async function deleteItem(item){if(!confirm(item.rank+' / '+item.role+' 항목을 삭제할까요?'))return;try{scores=await api('/api/scores/'+encodeURIComponent(item.id),{method:'DELETE'});render();say('항목을 삭제했습니다.')}catch(e){say(e.message)}}
+load();
+</script></body></html>
